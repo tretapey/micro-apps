@@ -10,7 +10,9 @@ A Node.js application that provides a skeleton for interacting with the Google D
 - Modular and extensible structure
 - Filter data by specific columns
 - Search functionality to find specific text
+- Optional pagination support for large datasets
 - Support for multiple sheets within a spreadsheet
+- No row limit - retrieves all available data
 
 ## Prerequisites
 
@@ -82,15 +84,17 @@ This will verify if your credentials are correctly configured.
 #### Get data from a spreadsheet
 
 ```
-GET /sheets?sheetId=YOUR_SHEET_ID&range=A1:D10&sheetName=Sheet1&columns=Name,Email,Phone&search=john
+GET /sheets?sheetId=YOUR_SHEET_ID&range=A1:D10&sheetName=Sheet1&columns=Name,Email,Phone&search=john&page=1&pageSize=10
 ```
 
 Query parameters:
 - `sheetId` (optional if defined in .env): Spreadsheet ID
-- `range` (optional, default 'A1:Z1000'): Cell range to read
+- `range` (optional, default 'A:Z'): Cell range to read. The default retrieves all rows from columns A to Z.
 - `sheetName` (optional): Name of the specific sheet in the spreadsheet (e.g., 'Sheet1', 'Orders', etc.)
 - `columns` (optional): Comma-separated list of column names to include in the response
 - `search` (optional): Text to search for in any cell of the spreadsheet
+- `page` (optional): Page number for pagination (only used if pageSize is specified)
+- `pageSize` (optional): Number of items per page (if omitted or set to 0, pagination is disabled)
 
 When using the `columns` parameter:
 - The first row of the sheet is assumed to be the header row with column names
@@ -104,7 +108,14 @@ When using the `search` parameter:
 - The search works with both raw data and column-filtered data
 - If used with `columns`, the search is applied first, then the column filtering
 
-Example response with columns parameter and search:
+When using pagination (`page` and `pageSize`):
+- Pagination is completely optional
+- If `pageSize` is not specified or set to 0, ALL results will be returned without pagination
+- If `pageSize` is specified, results will be divided into pages of that size
+- Use `page` to specify which page of results to retrieve
+- The response includes pagination metadata (total items, current page, etc.)
+
+Example response with columns, search, and pagination:
 ```json
 {
   "data": [
@@ -112,8 +123,34 @@ Example response with columns parameter and search:
       "Name": "John Doe",
       "Email": "john@example.com",
       "Phone": "555-1234"
+    },
+    {
+      "Name": "Johnny Smith",
+      "Email": "johnny@example.com",
+      "Phone": "555-5678"
     }
-  ]
+  ],
+  "pagination": {
+    "total": 15,
+    "page": 1,
+    "pageSize": 10,
+    "totalPages": 2
+  }
+}
+```
+
+Example response without pagination (all results returned):
+```json
+{
+  "data": [
+    // All matching rows returned here
+  ],
+  "pagination": {
+    "total": 42,
+    "page": 1,
+    "pageSize": 42,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -177,6 +214,16 @@ Parameters:
    - The search is applied to all cells in the specified range
    - If no results are returned, try broadening your search term
    - Search is case-insensitive for better matching
+
+7. **Pagination**
+   - By default (without specifying pageSize), ALL results are returned
+   - To enable pagination, you must explicitly set the pageSize parameter
+   - If you're seeing unexpected pagination, check if pageSize is being set somewhere
+
+8. **Row Limits**
+   - The default range 'A:Z' retrieves all rows in columns A through Z
+   - If you need more columns, you can specify a wider range like 'A:AA' or 'A:ZZ'
+   - For very large spreadsheets, consider using pagination to improve performance
 
 ## Extension
 

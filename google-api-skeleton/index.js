@@ -39,10 +39,12 @@ app.get('/sheets', async (req, res) => {
   try {
     const { 
       sheetId = process.env.GOOGLE_SHEET_ID, 
-      range = 'A1:Z1000',
+      range = 'A:Z',
       sheetName = '',
       columns = '',
-      search = ''
+      search = '',
+      page,
+      pageSize
     } = req.query;
     
     if (!sheetId) {
@@ -51,9 +53,22 @@ app.get('/sheets', async (req, res) => {
 
     // Parse columns if provided
     const columnArray = columns ? columns.split(',').map(col => col.trim()) : [];
+    
+    // Parse pagination parameters - only if they are explicitly provided
+    const pageNumber = page ? parseInt(page, 10) || 1 : 1;
+    const pageSizeNumber = pageSize ? parseInt(pageSize, 10) || 0 : 0;
 
-    const data = await getSheetData(sheetId, range, sheetName, columnArray, search);
-    res.json({ data });
+    const result = await getSheetData(
+      sheetId, 
+      range, 
+      sheetName, 
+      columnArray, 
+      search,
+      pageNumber,
+      pageSizeNumber
+    );
+    
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

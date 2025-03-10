@@ -22,9 +22,17 @@ function getAuthClient() {
 }
 
 // Process sheet data to filter by column names and/or search text
-function processSheetData(data, columns = [], searchText = '') {
+function processSheetData(data, columns = [], searchText = '', page = 1, pageSize = 0) {
   if (!data || data.length === 0) {
-    return [];
+    return {
+      data: [],
+      pagination: {
+        total: 0,
+        page: 1,
+        pageSize: 0,
+        totalPages: 1
+      }
+    };
   }
 
   const headers = data[0];
@@ -50,62 +58,81 @@ function processSheetData(data, columns = [], searchText = '') {
     }
   }
 
-  // If no columns specified, convert the filtered data to array of objects
-  if (!columns || columns.length === 0) {
-    const result = [];
+  // Convert data to array of objects (either all columns or filtered columns)
+  let processedData = [];
+  
+  // For each row (except header row)
+  for (let i = 1; i < filteredData.length; i++) {
+    const row = filteredData[i];
+    let rowObject = {};
     
-    // For each row (except header row)
-    for (let i = 1; i < filteredData.length; i++) {
-      const row = filteredData[i];
-      const rowObject = {};
-      
+    if (!columns || columns.length === 0) {
       // Add all columns to the result
       headers.forEach((header, index) => {
         rowObject[header] = row[index] || '';
       });
+    } else {
+      // Add only the requested columns to the result
+      const columnIndices = columns.map(col => {
+        const index = headers.findIndex(header => 
+          header.toLowerCase() === col.toLowerCase()
+        );
+        return index !== -1 ? index : null;
+      });
       
-      result.push(rowObject);
+      // Check if any requested columns were found
+      if (columnIndices.every(idx => idx === null)) {
+        throw new Error(`None of the requested columns (${columns.join(', ')}) were found in the sheet.`);
+      }
+      
+      // Add only the requested columns to the result
+      columnIndices.forEach((colIndex, idx) => {
+        if (colIndex !== null) {
+          rowObject[headers[colIndex]] = row[colIndex] || '';
+        }
+      });
     }
     
-    return result;
+    processedData.push(rowObject);
   }
 
-  // If columns are specified, filter by those columns
-  const result = [];
+  // Calculate pagination info
+  const total = processedData.length;
   
-  // Find indices of requested columns
-  const columnIndices = columns.map(col => {
-    const index = headers.findIndex(header => 
-      header.toLowerCase() === col.toLowerCase()
-    );
-    return index !== -1 ? index : null;
-  });
-
-  // Check if any requested columns were found
-  if (columnIndices.every(idx => idx === null)) {
-    throw new Error(`None of the requested columns (${columns.join(', ')}) were found in the sheet.`);
-  }
-
-  // For each row (except header row)
-  for (let i = 1; i < filteredData.length; i++) {
-    const row = filteredData[i];
-    const filteredRow = {};
-    
-    // Add only the requested columns to the result
-    columnIndices.forEach((colIndex, idx) => {
-      if (colIndex !== null) {
-        filteredRow[headers[colIndex]] = row[colIndex] || '';
+  // If pageSize is 0 or negative, return all results without pagination
+  if (pageSize <= 0) {
+    return {
+      data: processedData,
+      pagination: {
+        total: total,
+        page: 1,
+        pageSize: total,
+        totalPages: 1
       }
-    });
-    
-    result.push(filteredRow);
+    };
   }
-
-  return result;
+  
+  // Otherwise, apply pagination
+  const totalPages = Math.ceil(total / pageSize);
+  const currentPage = page > 0 ? Math.min(page, totalPages || 1) : 1;
+  
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, total);
+  const paginatedData = processedData.slice(startIndex, endIndex);
+  
+  return {
+    data: paginatedData,
+    pagination: {
+      total: total,
+      page: currentPage,
+      pageSize: pageSize,
+      totalPages: totalPages || 1
+    }
+  };
 }
 
 // Get data from a Google Sheet
-async function getSheetData(sheetId, range, sheetName = '', columns = [], searchText = '') {
+async function getSheetData(sheetId, range, sheetName = '', columns = [], searchText = '', page = 1, pageSize = 0) {
   try {
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -120,8 +147,8 @@ async function getSheetData(sheetId, range, sheetName = '', columns = [], search
     
     const data = response.data.values;
     
-    // Process the data with filtering by columns and/or search text
-    return processSheetData(data, columns, searchText);
+    // Process the data with filtering by columns and/or search text and pagination
+    return processSheetData(data, columns, searchText, page, pageSize);
   } catch (error) {
     console.error('Error getting data from Google Sheets:', error);
     
