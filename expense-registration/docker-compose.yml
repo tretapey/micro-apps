@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - DOCKER=true
+
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+      - backend_node_modules:/app/node_modules
+    depends_on:
+      - db
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_PATH=/app/data/expenses.db
+
+  db:
+    image: nouchka/sqlite3:latest
+    volumes:
+      - ./data:/root/db
+
+volumes:
+  backend_node_modules: 
